@@ -10,8 +10,8 @@
 // Color palette (AMOLED-optimized — true black saves power)
 // ---------------------------------------------------------------------------
 #define COLOR_BG      lv_color_hex(0x000000)  // black
-#define COLOR_PRIMARY lv_color_hex(0xFFFFFF)  // white  — clock digits
-#define COLOR_ACCENT  lv_color_hex(0x00C853)  // green  — labels, active dot
+#define COLOR_PRIMARY lv_color_hex(0x00C853)  // green  — clock digits
+#define COLOR_ACCENT  lv_color_hex(0xFFFFFF)  // white  — labels, active dot
 #define COLOR_DIM     lv_color_hex(0x333333)  // dark grey — inactive dots
 #define COLOR_SUBTLE  lv_color_hex(0x777777)  // grey   — date text
 #define COLOR_WARN    lv_color_hex(0xFF6B35)  // amber  — WiFi error
@@ -26,6 +26,8 @@ static uint8_t brightness_index = BRIGHTNESS_INIT_IDX;
 // ---------------------------------------------------------------------------
 static lv_obj_t *unix_number_label   = nullptr;
 static lv_obj_t *unix_date_label     = nullptr;
+static lv_obj_t *utc_number_label    = nullptr;
+static lv_obj_t *utc_date_label      = nullptr;
 static lv_obj_t *time24_number_label = nullptr;
 static lv_obj_t *time24_date_label   = nullptr;
 static lv_obj_t *time12_number_label = nullptr;
@@ -36,11 +38,12 @@ static lv_obj_t *net_rssi_label      = nullptr;
 
 // Tileview and phantom wrap tile
 static lv_obj_t *tv      = nullptr;
-static lv_obj_t *t4_tile = nullptr;   // phantom tile — activating it wraps to tile 0
+static lv_obj_t *t5_tile = nullptr;   // phantom tile — activating it wraps to tile 0
 
 // Persistent overlay
 static lv_obj_t *wifi_status_label = nullptr;
-static lv_obj_t *dot_indicators[4] = {};
+static constexpr uint8_t PAGE_COUNT = 5;
+static lv_obj_t *dot_indicators[PAGE_COUNT] = {};
 
 // ---------------------------------------------------------------------------
 // Forward declarations (internal)
@@ -50,9 +53,10 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font,
                              lv_coord_t x_ofs, lv_coord_t y_ofs,
                              const char *text);
 static void create_view0_unix(lv_obj_t *parent);
-static void create_view1_24h(lv_obj_t *parent);
-static void create_view2_12h(lv_obj_t *parent);
-static void create_view3_network(lv_obj_t *parent);
+static void create_view1_utc(lv_obj_t *parent);
+static void create_view2_24h(lv_obj_t *parent);
+static void create_view3_12h(lv_obj_t *parent);
+static void create_view4_network(lv_obj_t *parent);
 static void create_overlay_indicators(lv_obj_t *screen);
 static void update_dot_indicators(uint8_t active);
 static void on_clock_tick(lv_timer_t *t);
@@ -96,26 +100,29 @@ void build_ui()
     lv_obj_set_style_bg_color(tv, COLOR_BG, LV_PART_MAIN);
     lv_obj_set_scrollbar_mode(tv, LV_SCROLLBAR_MODE_OFF);
 
-    // Four content tiles + one phantom wrap tile (col 4, invisible)
-    // t3 uses LV_DIR_HOR so the user can swipe forward into the phantom t4.
-    // When t4 activates, on_tile_changed instantly snaps to tile 0 — circular wrap.
+    // Five content tiles + one phantom wrap tile (col 5, invisible)
+    // t4 uses LV_DIR_HOR so the user can swipe forward into the phantom t5.
+    // When t5 activates, on_tile_changed instantly snaps to tile 0 — circular wrap.
     lv_obj_t *t0 = lv_tileview_add_tile(tv, 0, 0, LV_DIR_RIGHT);
     lv_obj_t *t1 = lv_tileview_add_tile(tv, 1, 0, LV_DIR_HOR);
     lv_obj_t *t2 = lv_tileview_add_tile(tv, 2, 0, LV_DIR_HOR);
-    lv_obj_t *t3 = lv_tileview_add_tile(tv, 3, 0, LV_DIR_HOR);   // HOR allows forward swipe
-    t4_tile      = lv_tileview_add_tile(tv, 4, 0, LV_DIR_LEFT);   // phantom — triggers wrap
+    lv_obj_t *t3 = lv_tileview_add_tile(tv, 3, 0, LV_DIR_HOR);
+    lv_obj_t *t4 = lv_tileview_add_tile(tv, 4, 0, LV_DIR_HOR);   // HOR allows forward swipe
+    t5_tile      = lv_tileview_add_tile(tv, 5, 0, LV_DIR_LEFT);   // phantom — triggers wrap
 
     lv_obj_set_style_bg_color(t0,      COLOR_BG, LV_PART_MAIN);
     lv_obj_set_style_bg_color(t1,      COLOR_BG, LV_PART_MAIN);
     lv_obj_set_style_bg_color(t2,      COLOR_BG, LV_PART_MAIN);
     lv_obj_set_style_bg_color(t3,      COLOR_BG, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(t4_tile, COLOR_BG, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(t4,      COLOR_BG, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(t5_tile, COLOR_BG, LV_PART_MAIN);
 
     create_view0_unix(t0);
-    create_view1_24h(t1);
-    create_view2_12h(t2);
-    create_view3_network(t3);
-    // t4 intentionally empty — wraps instantly to t0 on activate
+    create_view1_utc(t1);
+    create_view2_24h(t2);
+    create_view3_12h(t3);
+    create_view4_network(t4);
+    // t5 intentionally empty — wraps instantly to t0 on activate
 
     // Overlay sits on top of tileview (rendered after, so always visible)
     create_overlay_indicators(screen);
@@ -128,6 +135,7 @@ void build_ui()
     lv_obj_add_event_cb(t1, on_screen_tap, LV_EVENT_SHORT_CLICKED, nullptr);
     lv_obj_add_event_cb(t2, on_screen_tap, LV_EVENT_SHORT_CLICKED, nullptr);
     lv_obj_add_event_cb(t3, on_screen_tap, LV_EVENT_SHORT_CLICKED, nullptr);
+    lv_obj_add_event_cb(t4, on_screen_tap, LV_EVENT_SHORT_CLICKED, nullptr);
 
     lv_timer_create(on_clock_tick, 200, nullptr);
     lv_timer_create(on_wifi_status_tick, 2000, nullptr);
@@ -161,9 +169,36 @@ static void create_view0_unix(lv_obj_t *parent)
 }
 
 // ---------------------------------------------------------------------------
-// View 1: 24h Clock
+// View 1: UTC Clock
 // ---------------------------------------------------------------------------
-static void create_view1_24h(lv_obj_t *parent)
+static void create_view1_utc(lv_obj_t *parent)
+{
+    make_label(parent,
+               &lv_font_montserrat_32,
+               COLOR_ACCENT,
+               LV_ALIGN_TOP_MID, 0, 30,
+               "UTC");
+
+    utc_number_label = make_label(parent,
+                                  &lv_font_montserrat_48,
+                                  COLOR_PRIMARY,
+                                  LV_ALIGN_CENTER, 0, 0,
+                                  "Syncing...");
+    lv_obj_set_width(utc_number_label, LV_HOR_RES - 4);
+    lv_label_set_long_mode(utc_number_label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(utc_number_label, LV_TEXT_ALIGN_CENTER, 0);
+
+    utc_date_label = make_label(parent,
+                                &lv_font_montserrat_24,
+                                COLOR_SUBTLE,
+                                LV_ALIGN_CENTER, 0, 55,
+                                "");
+}
+
+// ---------------------------------------------------------------------------
+// View 2: 24h Clock
+// ---------------------------------------------------------------------------
+static void create_view2_24h(lv_obj_t *parent)
 {
     make_label(parent,
                &lv_font_montserrat_32,
@@ -188,9 +223,9 @@ static void create_view1_24h(lv_obj_t *parent)
 }
 
 // ---------------------------------------------------------------------------
-// View 2: 12h Clock
+// View 3: 12h Clock
 // ---------------------------------------------------------------------------
-static void create_view2_12h(lv_obj_t *parent)
+static void create_view3_12h(lv_obj_t *parent)
 {
     make_label(parent,
                &lv_font_montserrat_32,
@@ -215,9 +250,9 @@ static void create_view2_12h(lv_obj_t *parent)
 }
 
 // ---------------------------------------------------------------------------
-// View 3: Network Info
+// View 4: Network Info
 // ---------------------------------------------------------------------------
-static void create_view3_network(lv_obj_t *parent)
+static void create_view4_network(lv_obj_t *parent)
 {
     make_label(parent,
                &lv_font_montserrat_32,
@@ -260,14 +295,14 @@ static void create_overlay_indicators(lv_obj_t *screen)
     lv_obj_set_style_bg_opa(wifi_status_label, LV_OPA_TRANSP, 0);
     lv_obj_align(wifi_status_label, LV_ALIGN_TOP_RIGHT, -10, 10);
 
-    // Four dots at the bottom, horizontally centered
+    // Page dots at the bottom, horizontally centered
     const lv_coord_t dot_size = 8;
     const lv_coord_t dot_gap  = 14;   // center-to-center spacing
-    const lv_coord_t total_w  = (4 - 1) * dot_gap;
+    const lv_coord_t total_w  = (PAGE_COUNT - 1) * dot_gap;
     const lv_coord_t start_x  = (LV_HOR_RES - total_w) / 2 - dot_size / 2;
     const lv_coord_t dot_y    = LV_VER_RES - 22;
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < PAGE_COUNT; i++) {
         dot_indicators[i] = lv_obj_create(screen);
         lv_obj_set_size(dot_indicators[i], dot_size, dot_size);
         lv_obj_set_style_radius(dot_indicators[i], LV_RADIUS_CIRCLE, 0);
@@ -281,7 +316,7 @@ static void create_overlay_indicators(lv_obj_t *screen)
 
 static void update_dot_indicators(uint8_t active)
 {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < PAGE_COUNT; i++) {
         lv_obj_set_style_bg_color(dot_indicators[i],
                                   i == active ? COLOR_ACCENT : COLOR_DIM, 0);
     }
@@ -292,7 +327,7 @@ static void update_dot_indicators(uint8_t active)
 // ---------------------------------------------------------------------------
 
 // One-shot timer callback: deferred snap to tile 0 after LVGL finishes
-// processing the VALUE_CHANGED event for the phantom tile 4.
+// processing the VALUE_CHANGED event for the phantom tile 5.
 // Calling lv_obj_set_tile_id directly inside VALUE_CHANGED corrupts the
 // internal scroll state and breaks subsequent swipes from tile 0.
 static void on_wrap_timer(lv_timer_t *t)
@@ -306,8 +341,8 @@ static void on_tile_changed(lv_event_t *e)
     lv_obj_t *tv_evt   = lv_event_get_target(e);
     lv_obj_t *tile_act = lv_tileview_get_tile_act(tv_evt);
 
-    // Phantom tile 4 activated — schedule wrap to tile 0 for next tick
-    if (tile_act == t4_tile) {
+    // Phantom tile 5 activated — schedule wrap to tile 0 for next tick
+    if (tile_act == t5_tile) {
         update_dot_indicators(0);                    // dots show tile 0 immediately
         lv_timer_t *wrap_timer = lv_timer_create(on_wrap_timer, 1, nullptr);
         lv_timer_set_repeat_count(wrap_timer, 1);
@@ -315,11 +350,11 @@ static void on_tile_changed(lv_event_t *e)
     }
 
     uint8_t idx = (uint8_t)lv_obj_get_index(tile_act);
-    if (idx < 4) update_dot_indicators(idx);
+    if (idx < PAGE_COUNT) update_dot_indicators(idx);
 }
 
 // ---------------------------------------------------------------------------
-// Clock tick — shared 200ms timer updates all three clock views
+// Clock tick — shared 200ms timer updates all clock views
 // ---------------------------------------------------------------------------
 static void on_clock_tick(lv_timer_t * /*t*/)
 {
@@ -331,7 +366,7 @@ static void on_clock_tick(lv_timer_t * /*t*/)
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
 
-    // Date string is identical across all three views — compute once
+    // Date string is identical across local-time views — compute once
     strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
 
     // View 0: raw Unix timestamp
@@ -339,12 +374,21 @@ static void on_clock_tick(lv_timer_t * /*t*/)
     lv_label_set_text(unix_number_label, buf);
     lv_label_set_text(unix_date_label, date_buf);
 
-    // View 1: 24h HH:MM:SS
+    // View 1: UTC HH:MM:SS
+    gmtime_r(&now, &timeinfo);
+    strftime(buf, sizeof(buf), "%H:%M:%S", &timeinfo);
+    strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
+    lv_label_set_text(utc_number_label, buf);
+    lv_label_set_text(utc_date_label, date_buf);
+
+    // View 2: 24h HH:MM:SS
+    localtime_r(&now, &timeinfo);
+    strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
     strftime(buf, sizeof(buf), "%H:%M:%S", &timeinfo);
     lv_label_set_text(time24_number_label, buf);
     lv_label_set_text(time24_date_label, date_buf);
 
-    // View 2: 12h HH:MM:SS AM/PM
+    // View 3: 12h HH:MM:SS AM/PM
     int hour12 = timeinfo.tm_hour % 12;
     if (hour12 == 0) hour12 = 12;
     snprintf(buf, sizeof(buf), "%02d:%02d:%02d %s",

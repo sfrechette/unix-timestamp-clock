@@ -1,6 +1,6 @@
 # Unix Timestamp Clock
 
-A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that displays the current Unix timestamp, 24-hour time, 12-hour time, and network status — with BLE-based WiFi provisioning and NTP time sync.
+A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that displays the current Unix timestamp, UTC, 24-hour time, 12-hour time, and network status — with BLE-based WiFi provisioning and NTP time sync.
 
 ![Hardware](https://img.shields.io/static/v1?label=Hardware&message=LILYGO%20T-Display-S3%20AMOLED%20(Touch)&color=red)
 ![ESP32](https://img.shields.io/static/v1?label=ESP32&message=S3&color=blue)
@@ -10,15 +10,16 @@ A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that dis
 
 ## Features
 
-- **4 swipeable views** with circular navigation (swipe past the last page to loop back to the first)
+- **5 swipeable views** with circular navigation (swipe past the last page to loop back to the first)
 - **Unix Timestamp** — raw seconds since epoch
+- **UTC clock** — `HH:MM:SS` coordinated universal time with full date
 - **24-hour clock** — `HH:MM:SS` with full date
 - **12-hour clock** — `HH:MM:SS AM/PM` with full date
 - **Network Info** — SSID, IP address, and RSSI signal strength
 - **BLE WiFi provisioning** — configure WiFi credentials wirelessly via nRF Connect (PIN-protected)
 - **NTP time sync** — syncs via `pool.ntp.org`, `time.nist.gov`, `time.google.com`
 - **WiFi status overlay** — green/amber/grey icon in the top-right corner
-- **Page dot indicators** — 4 dots at the bottom, active dot shown in green
+- **Page dot indicators** — 5 dots at the bottom, active dot shown in green
 - **Brightness cycling** — tap the screen to cycle 4 brightness levels (64 → 128 → 192 → 255)
 - **Credentials persist** across reboots via ESP32 NVS (Non-Volatile Storage)
 
@@ -131,7 +132,7 @@ setup()
   ├─ setBrightness(192)          // Start at level 3/4
   ├─ beginLvglHelperDMA()        // Init LVGL with internal DMA buffers
   ├─ build_ui()                  // Create tileview, labels, overlay, timers
-  │    ├─ on_clock_tick (200ms)  // Updates all 3 clock views
+  │    ├─ on_clock_tick (200ms)  // Updates all clock views
   │    └─ on_wifi_status_tick (2s) // Updates WiFi icon + network view
   ├─ load_wifi_credentials()     // Read from NVS (seed from secrets.h if first boot)
   ├─ ble_init()                  // Start BLE GATT server, begin advertising
@@ -155,7 +156,7 @@ loop()
                              │
               ┌──────────────▼──────────────┐
               │    LVGL UI Build             │
-              │  4 tiles + phantom tile 4    │
+              │  5 tiles + phantom tile 5    │
               │  Overlay: WiFi icon + dots   │
               │  Timers: clock(200ms)        │
               │          wifi_status(2s)     │
@@ -187,6 +188,7 @@ loop()
        │
        ├── on_clock_tick (200ms)
        │       ├── Unix timestamp label
+       │       ├── UTC HH:MM:SS label
        │       ├── 24h HH:MM:SS label
        │       └── 12h HH:MM:SS AM/PM label
        │
@@ -207,7 +209,7 @@ loop()
 
 | Topic | Detail |
 |---|---|
-| LVGL circular navigation | Phantom tile at col 4; `VALUE_CHANGED` defers snap to tile 0 via a 1ms one-shot timer — calling directly corrupts scroll state |
+| LVGL circular navigation | Phantom tile at col 5; `VALUE_CHANGED` defers snap to tile 0 via a 1ms one-shot timer — calling directly corrupts scroll state |
 | DMA buffers | `beginLvglHelperDMA` used instead of `beginLvglHelper` to avoid PSRAM init dependency on cold boot |
 | BLE before WiFi | BLE must be initialized first — both share the same radio and the coexistence layer expects this order |
 | NVS seeding | `secrets.h` values seed NVS only on first boot (`isKey("ssid")` check). BLE-provisioned values persist across reboots |
