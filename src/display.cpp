@@ -14,7 +14,8 @@
 #define COLOR_PRIMARY lv_color_hex(0x00C853)  // green  — clock digits
 #define COLOR_ACCENT  lv_color_hex(0xFFFFFF)  // white  — labels, active dot
 #define COLOR_DIM     lv_color_hex(0x333333)  // dark grey — inactive dots
-#define COLOR_SUBTLE  lv_color_hex(0x777777)  // grey   — date text
+#define COLOR_DATE    lv_color_hex(0xCCCCCC)  // off-white — date text
+#define COLOR_SUBTLE  lv_color_hex(0x777777)  // grey   — ms digits, network details
 #define COLOR_WARN    lv_color_hex(0xFF6B35)  // amber  — WiFi error
 
 // ---------------------------------------------------------------------------
@@ -211,7 +212,7 @@ static void create_view0_unix(lv_obj_t *parent)
 
     unix_date_label = make_label(parent,
                                  &lv_font_montserrat_24,
-                                 COLOR_SUBTLE,
+                                 COLOR_DATE,
                                  LV_ALIGN_CENTER, 0, 55,
                                  "");
 }
@@ -237,7 +238,7 @@ static void create_view1_utc(lv_obj_t *parent)
 
     utc_date_label = make_label(parent,
                                 &lv_font_montserrat_24,
-                                COLOR_SUBTLE,
+                                COLOR_DATE,
                                 LV_ALIGN_CENTER, 0, 55,
                                 "");
 }
@@ -263,7 +264,7 @@ static void create_view2_24h(lv_obj_t *parent)
 
     time24_date_label = make_label(parent,
                                    &lv_font_montserrat_24,
-                                   COLOR_SUBTLE,
+                                   COLOR_DATE,
                                    LV_ALIGN_CENTER, 0, 55,
                                    "");
 }
@@ -295,7 +296,7 @@ static void create_view3_12h(lv_obj_t *parent)
 
     time12_date_label = make_label(parent,
                                    &lv_font_montserrat_24,
-                                   COLOR_SUBTLE,
+                                   COLOR_DATE,
                                    LV_ALIGN_CENTER, 0, 55,
                                    "");
 }
