@@ -1,5 +1,5 @@
 // Unix Timestamp Clock — LILYGO T-Display-S3 AMOLED
-// WiFi NTP sync · BLE WiFi provisioning · 4 swipeable views · circular navigation
+// WiFi NTP sync · BLE WiFi provisioning · 5 swipeable views · circular navigation
 
 #include <Arduino.h>
 #include <LilyGo_AMOLED.h>

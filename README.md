@@ -12,14 +12,15 @@ A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that dis
 
 - **5 swipeable views** with circular navigation (swipe past the last page to loop back to the first)
 - **Unix Timestamp** — raw seconds since epoch
-- **UTC clock** — `HH:MM:SS` coordinated universal time with full date
-- **24-hour clock** — `HH:MM:SS` with full date
-- **12-hour clock** — `HH:MM:SS AM/PM` with full date
+- **UTC clock** — `HH:MM:SS.mmm` coordinated universal time with full date
+- **24-hour clock** — `HH:MM:SS.mmm` with full date
+- **12-hour clock** — `HH:MM:SS.mmm AM/PM` with full date
+- **Live milliseconds** — smooth `.mmm` counter on the UTC, 24h and 12h views (~30 fps)
 - **Network Info** — SSID, IP address, and RSSI signal strength
 - **BLE WiFi provisioning** — configure WiFi credentials wirelessly via nRF Connect (PIN-protected)
-- **NTP time sync** — syncs via `pool.ntp.org`, `time.nist.gov`, `time.google.com`
-- **WiFi status overlay** — green/amber/grey icon in the top-right corner
-- **Page dot indicators** — 5 dots at the bottom, active dot shown in green
+- **NTP time sync** — syncs via `pool.ntp.org`, `time.nist.gov`, `time.google.com`, re-syncing every 15 minutes
+- **WiFi status overlay** — white/amber/grey icon in the top-right corner
+- **Page dot indicators** — 5 dots at the bottom, active dot shown in white
 - **Brightness cycling** — tap the screen to cycle 4 brightness levels (64 → 128 → 192 → 255)
 - **Credentials persist** across reboots via ESP32 NVS (Non-Volatile Storage)
 
@@ -114,7 +115,7 @@ unix-timestamp-clock/
 │   ├── ble_provision.h   # ble_init() declaration
 │   └── secrets.h         # credentials — gitignored, never committed
 ├── src/
-│   ├── main.cpp          # setup() + loop() — 57 lines
+│   ├── main.cpp          # setup() + loop()
 │   ├── display.cpp       # All LVGL UI, timers, event callbacks
 │   ├── wifi_manager.cpp  # NVS credential load, WiFi init, reconnect
 │   └── ble_provision.cpp # BLE GATT server, PIN auth, credential apply
@@ -132,11 +133,11 @@ setup()
   ├─ setBrightness(192)          // Start at level 3/4
   ├─ beginLvglHelperDMA()        // Init LVGL with internal DMA buffers
   ├─ build_ui()                  // Create tileview, labels, overlay, timers
-  │    ├─ on_clock_tick (200ms)  // Updates all clock views
+  │    ├─ on_clock_tick (33ms)   // ms labels every tick; time/date once per second
   │    └─ on_wifi_status_tick (2s) // Updates WiFi icon + network view
   ├─ load_wifi_credentials()     // Read from NVS (seed from secrets.h if first boot)
   ├─ ble_init()                  // Start BLE GATT server, begin advertising
-  └─ wifi_init()                 // Connect to WiFi, trigger NTP on IP acquired
+  └─ wifi_init()                 // Connect to WiFi, trigger NTP on IP acquired (15 min re-sync)
 
 loop()
   ├─ lv_task_handler()           // Drive LVGL rendering + timer callbacks
@@ -158,7 +159,7 @@ loop()
               │    LVGL UI Build             │
               │  5 tiles + phantom tile 5    │
               │  Overlay: WiFi icon + dots   │
-              │  Timers: clock(200ms)        │
+              │  Timers: clock(33ms)         │
               │          wifi_status(2s)     │
               └──────────────┬──────────────┘
                              │
@@ -178,7 +179,8 @@ loop()
                     │  → NVS write    │  └───────┬────────┘
                     │  → WiFi reconn. │          │
                     └─────────────────┘  ┌───────▼────────┐
-                                         │  time() valid  │
+                                         │ gettimeofday() │
+                                         │     valid      │
                                          │  Clocks update │
                                          └────────────────┘
 
@@ -186,14 +188,13 @@ loop()
 
   lv_task_handler()
        │
-       ├── on_clock_tick (200ms)
-       │       ├── Unix timestamp label
-       │       ├── UTC HH:MM:SS label
-       │       ├── 24h HH:MM:SS label
-       │       └── 12h HH:MM:SS AM/PM label
+       ├── on_clock_tick (33ms)
+       │       ├── every tick:      .mmm labels (UTC, 24h, 12h)
+       │       └── once per second: Unix timestamp, HH:MM:SS labels,
+       │                            dates, 12h AM/PM label
        │
        └── on_wifi_status_tick (2s)
-               ├── WiFi icon color (green / amber / grey)
+               ├── WiFi icon color (white / amber / grey)
                └── Network view: SSID, IP, RSSI
 
   wifi_reconnect_check (every 30s)
@@ -213,7 +214,31 @@ loop()
 | DMA buffers | `beginLvglHelperDMA` used instead of `beginLvglHelper` to avoid PSRAM init dependency on cold boot |
 | BLE before WiFi | BLE must be initialized first — both share the same radio and the coexistence layer expects this order |
 | NVS seeding | `secrets.h` values seed NVS only on first boot (`isKey("ssid")` check). BLE-provisioned values persist across reboots |
+| Milliseconds display | `.mmm` is a separate, smaller label next to `HH:MM:SS`, so fast-changing digits never shift the main time. On the 12h view, AM/PM is its own static label at a fixed offset (space reserved for the widest `.000`), so it never flickers or moves |
+| Update rate | Clock timer runs every 33 ms but only the ms labels change every tick; the main time, dates and Unix timestamp are rebuilt only when the second changes. Time is read with `gettimeofday()` so seconds roll over exactly at `.000` |
+| NTP interval | `sntp_set_sync_interval()` reduces re-sync from the 3 h SDK default to 15 min, limiting crystal drift between syncs |
 | AMOLED power | True black (`#000000`) background saves power on OLED — unlit pixels draw no current |
+
+## Time Accuracy
+
+- NTP over WiFi is typically accurate to **±10–50 ms** (network delay; the ESP32 uses simple one-shot SNTP).
+- Between the 15-minute re-syncs the ESP32 crystal drifts by roughly **10–20 ms**.
+- The millisecond digits count smoothly but are not millisecond-accurate — treat the last digit as decorative.
+- If WiFi drops, the clock keeps running on the crystal (drifting ~1–2 s/day) until it reconnects. With no WiFi at boot it stays on "Syncing..." (no battery-backed RTC).
+
+## Display Colors
+
+| Element | Color |
+|---|---|
+| Background | `#000000` black (unlit AMOLED pixels) |
+| Clock digits, AM/PM, network SSID | `#00C853` green |
+| View titles, active page dot, connected WiFi icon | `#FFFFFF` white |
+| Date text | `#CCCCCC` off-white |
+| Milliseconds, network details | `#777777` grey |
+| WiFi error icon | `#FF6B35` amber |
+| Inactive page dots, connecting WiFi icon | `#333333` dark grey |
+
+Colors are defined at the top of `src/display.cpp`.
 
 ## platformio.ini Notes
 
