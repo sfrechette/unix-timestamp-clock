@@ -5,6 +5,7 @@
 #include <LV_Helper.h>
 #include <WiFi.h>
 #include <time.h>
+#include <sys/time.h>
 
 // ---------------------------------------------------------------------------
 // Color palette (AMOLED-optimized — true black saves power)
@@ -32,6 +33,10 @@ static lv_obj_t *time24_number_label = nullptr;
 static lv_obj_t *time24_date_label   = nullptr;
 static lv_obj_t *time12_number_label = nullptr;
 static lv_obj_t *time12_date_label   = nullptr;
+static lv_obj_t *utc_ms_label        = nullptr;
+static lv_obj_t *time24_ms_label     = nullptr;
+static lv_obj_t *time12_ms_label     = nullptr;
+static lv_obj_t *time12_ampm_label   = nullptr;
 static lv_obj_t *net_ssid_label      = nullptr;
 static lv_obj_t *net_ip_label        = nullptr;
 static lv_obj_t *net_rssi_label      = nullptr;
@@ -52,6 +57,9 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font,
                              lv_color_t color, lv_align_t align,
                              lv_coord_t x_ofs, lv_coord_t y_ofs,
                              const char *text);
+static lv_obj_t *make_ms_label(lv_obj_t *parent, lv_obj_t *number_label);
+static void align_ms_label(lv_obj_t *ms_label, lv_obj_t *number_label);
+static void align_ampm_label();
 static void create_view0_unix(lv_obj_t *parent);
 static void create_view1_utc(lv_obj_t *parent);
 static void create_view2_24h(lv_obj_t *parent);
@@ -83,6 +91,46 @@ static lv_obj_t *make_label(lv_obj_t *parent,
     lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, 0);
     lv_obj_align(label, align, x_ofs, y_ofs);
     return label;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: smaller grey ".mmm" label that trails a clock's HH:MM:SS label.
+// Kept separate so the fast-changing digits never shift the big digits.
+// ---------------------------------------------------------------------------
+static lv_obj_t *make_ms_label(lv_obj_t *parent, lv_obj_t *number_label)
+{
+    lv_obj_t *label = make_label(parent,
+                                 &lv_font_montserrat_32,
+                                 COLOR_SUBTLE,
+                                 LV_ALIGN_CENTER, 0, 0,
+                                 "");
+    align_ms_label(label, number_label);
+    return label;
+}
+
+// lv_obj_align_to is one-shot, so re-run it whenever the main label's
+// text (and therefore width) changes — i.e. once per second.
+static void align_ms_label(lv_obj_t *ms_label, lv_obj_t *number_label)
+{
+    lv_obj_align_to(ms_label, number_label, LV_ALIGN_OUT_RIGHT_BOTTOM, 2, -6);
+}
+
+// AM/PM sits a fixed distance right of HH:MM:SS — reserved space for the
+// widest ".000" plus a gap — so it never moves as the ms digits change.
+static void align_ampm_label()
+{
+    static lv_coord_t ms_slot_w = 0;
+    if (ms_slot_w == 0) {
+        lv_point_t size;
+        lv_txt_get_size(&size, ".000", &lv_font_montserrat_32, 0, 0,
+                        LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        ms_slot_w = size.x + 2 + 14;   // 2 = ms label offset, 14 = gap
+    }
+    // Bottom-align, then shift so both fonts share the same text baseline
+    lv_coord_t baseline_ofs = lv_font_montserrat_40.base_line -
+                              lv_font_montserrat_48.base_line;
+    lv_obj_align_to(time12_ampm_label, time12_number_label,
+                    LV_ALIGN_OUT_RIGHT_BOTTOM, ms_slot_w, baseline_ofs);
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +185,7 @@ void build_ui()
     lv_obj_add_event_cb(t3, on_screen_tap, LV_EVENT_SHORT_CLICKED, nullptr);
     lv_obj_add_event_cb(t4, on_screen_tap, LV_EVENT_SHORT_CLICKED, nullptr);
 
-    lv_timer_create(on_clock_tick, 200, nullptr);
+    lv_timer_create(on_clock_tick, 33, nullptr);   // ~30 fps for the ms digits
     lv_timer_create(on_wifi_status_tick, 2000, nullptr);
 }
 
@@ -182,11 +230,10 @@ static void create_view1_utc(lv_obj_t *parent)
     utc_number_label = make_label(parent,
                                   &lv_font_montserrat_48,
                                   COLOR_PRIMARY,
-                                  LV_ALIGN_CENTER, 0, 0,
+                                  LV_ALIGN_CENTER, -40, 0,
                                   "Syncing...");
-    lv_obj_set_width(utc_number_label, LV_HOR_RES - 4);
-    lv_label_set_long_mode(utc_number_label, LV_LABEL_LONG_CLIP);
-    lv_obj_set_style_text_align(utc_number_label, LV_TEXT_ALIGN_CENTER, 0);
+    // Shifted left so HH:MM:SS + trailing ms label read as one centered group
+    utc_ms_label = make_ms_label(parent, utc_number_label);
 
     utc_date_label = make_label(parent,
                                 &lv_font_montserrat_24,
@@ -209,11 +256,10 @@ static void create_view2_24h(lv_obj_t *parent)
     time24_number_label = make_label(parent,
                                      &lv_font_montserrat_48,
                                      COLOR_PRIMARY,
-                                     LV_ALIGN_CENTER, 0, 0,
+                                     LV_ALIGN_CENTER, -40, 0,
                                      "Syncing...");
-    lv_obj_set_width(time24_number_label, LV_HOR_RES - 4);
-    lv_label_set_long_mode(time24_number_label, LV_LABEL_LONG_CLIP);
-    lv_obj_set_style_text_align(time24_number_label, LV_TEXT_ALIGN_CENTER, 0);
+    // Shifted left so HH:MM:SS + trailing ms label read as one centered group
+    time24_ms_label = make_ms_label(parent, time24_number_label);
 
     time24_date_label = make_label(parent,
                                    &lv_font_montserrat_24,
@@ -236,11 +282,16 @@ static void create_view3_12h(lv_obj_t *parent)
     time12_number_label = make_label(parent,
                                      &lv_font_montserrat_48,
                                      COLOR_PRIMARY,
-                                     LV_ALIGN_CENTER, 0, 0,
+                                     LV_ALIGN_CENTER, -75, 0,
                                      "Syncing...");
-    lv_obj_set_width(time12_number_label, LV_HOR_RES - 4);
-    lv_label_set_long_mode(time12_number_label, LV_LABEL_LONG_CLIP);
-    lv_obj_set_style_text_align(time12_number_label, LV_TEXT_ALIGN_CENTER, 0);
+    // Shifted left so HH:MM:SS + ms + AM/PM read as one centered group
+    time12_ms_label = make_ms_label(parent, time12_number_label);
+
+    time12_ampm_label = make_label(parent,
+                                   &lv_font_montserrat_40,
+                                   COLOR_PRIMARY,
+                                   LV_ALIGN_CENTER, 0, 0,
+                                   "");
 
     time12_date_label = make_label(parent,
                                    &lv_font_montserrat_24,
@@ -354,48 +405,69 @@ static void on_tile_changed(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
-// Clock tick — shared 200ms timer updates all clock views
+// Clock tick — shared 33ms timer updates all clock views.
+// Second-level text is only rebuilt when the second changes; the small ms
+// labels update every tick (off-screen ones are not redrawn by LVGL).
 // ---------------------------------------------------------------------------
 static void on_clock_tick(lv_timer_t * /*t*/)
 {
-    time_t now = time(nullptr);
+    struct timeval tv_now;
+    gettimeofday(&tv_now, nullptr);
+    time_t now = tv_now.tv_sec;
     if (now <= 1000000000UL) return;   // stay on "Syncing..." until NTP ready
 
     static char buf[32];
     static char date_buf[32];
+    static time_t last_sec = 0;
     struct tm timeinfo;
-    localtime_r(&now, &timeinfo);
 
-    // Date string is identical across local-time views — compute once
-    strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
+    if (now != last_sec) {
+        last_sec = now;
+        localtime_r(&now, &timeinfo);
 
-    // View 0: raw Unix timestamp
-    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)now);
-    lv_label_set_text(unix_number_label, buf);
-    lv_label_set_text(unix_date_label, date_buf);
+        // Date string is identical across local-time views — compute once
+        strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
 
-    // View 1: UTC HH:MM:SS
-    gmtime_r(&now, &timeinfo);
-    strftime(buf, sizeof(buf), "%H:%M:%S", &timeinfo);
-    strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
-    lv_label_set_text(utc_number_label, buf);
-    lv_label_set_text(utc_date_label, date_buf);
+        // View 0: raw Unix timestamp
+        snprintf(buf, sizeof(buf), "%llu", (unsigned long long)now);
+        lv_label_set_text(unix_number_label, buf);
+        lv_label_set_text(unix_date_label, date_buf);
 
-    // View 2: 24h HH:MM:SS
-    localtime_r(&now, &timeinfo);
-    strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
-    strftime(buf, sizeof(buf), "%H:%M:%S", &timeinfo);
-    lv_label_set_text(time24_number_label, buf);
-    lv_label_set_text(time24_date_label, date_buf);
+        // View 1: UTC HH:MM:SS
+        gmtime_r(&now, &timeinfo);
+        strftime(buf, sizeof(buf), "%H:%M:%S", &timeinfo);
+        strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
+        lv_label_set_text(utc_number_label, buf);
+        lv_label_set_text(utc_date_label, date_buf);
+        align_ms_label(utc_ms_label, utc_number_label);
 
-    // View 3: 12h HH:MM:SS AM/PM
-    int hour12 = timeinfo.tm_hour % 12;
-    if (hour12 == 0) hour12 = 12;
-    snprintf(buf, sizeof(buf), "%02d:%02d:%02d %s",
-             hour12, timeinfo.tm_min, timeinfo.tm_sec,
-             timeinfo.tm_hour < 12 ? "AM" : "PM");
-    lv_label_set_text(time12_number_label, buf);
-    lv_label_set_text(time12_date_label, date_buf);
+        // View 2: 24h HH:MM:SS
+        localtime_r(&now, &timeinfo);
+        strftime(date_buf, sizeof(date_buf), "%A, %B %d %Y", &timeinfo);
+        strftime(buf, sizeof(buf), "%H:%M:%S", &timeinfo);
+        lv_label_set_text(time24_number_label, buf);
+        lv_label_set_text(time24_date_label, date_buf);
+        align_ms_label(time24_ms_label, time24_number_label);
+
+        // View 3: 12h HH:MM:SS + static AM/PM label
+        int hour12 = timeinfo.tm_hour % 12;
+        if (hour12 == 0) hour12 = 12;
+        snprintf(buf, sizeof(buf), "%02d:%02d:%02d",
+                 hour12, timeinfo.tm_min, timeinfo.tm_sec);
+        lv_label_set_text(time12_number_label, buf);
+        lv_label_set_text(time12_date_label, date_buf);
+        align_ms_label(time12_ms_label, time12_number_label);
+        lv_label_set_text_static(time12_ampm_label,
+                                 timeinfo.tm_hour < 12 ? "AM" : "PM");
+        align_ampm_label();
+    }
+
+    // Milliseconds — every tick
+    int ms = (int)(tv_now.tv_usec / 1000);
+    snprintf(buf, sizeof(buf), ".%03d", ms);
+    lv_label_set_text(utc_ms_label, buf);
+    lv_label_set_text(time24_ms_label, buf);
+    lv_label_set_text(time12_ms_label, buf);
 }
 
 // ---------------------------------------------------------------------------

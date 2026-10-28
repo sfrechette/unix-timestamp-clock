@@ -3,6 +3,7 @@
 
 #include <WiFi.h>
 #include <time.h>
+#include <esp_sntp.h>
 #include <Preferences.h>
 
 String wifi_ssid;
@@ -19,6 +20,9 @@ static void on_wifi_event(WiFiEvent_t event)
         break;
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
         Serial.printf("[WiFi] IP: %s\n", WiFi.localIP().toString().c_str());
+        // Re-sync every 15 min (SDK default is 3 h) — keeps crystal drift
+        // to ~10-20 ms so the millisecond display stays meaningful
+        sntp_set_sync_interval(15 * 60 * 1000);
         configTzTime(TIMEZONE_STR,
                      "pool.ntp.org", "time.nist.gov", "time.google.com");
         Serial.println("[NTP] Sync started — waiting for valid time");
