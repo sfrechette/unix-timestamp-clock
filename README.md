@@ -7,9 +7,10 @@ A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that dis
 ![Platform](https://img.shields.io/badge/Platform-PlatformIO-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-![screen1](docs/images/IMG_1873.jpeg)
-![screen1](docs/images/IMG_1874.jpeg)
-![screen1](docs/images/IMG_1872.jpeg)
+![screen1](docs/images/unixtimestamp.png)
+![screen1](docs/images/utc.png)
+![screen1](docs/images/24hour.png)
+![screen1](docs/images/12hour.png)
 
 ## Features
 
