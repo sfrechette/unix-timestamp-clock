@@ -7,6 +7,9 @@ A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that dis
 ![Platform](https://img.shields.io/badge/Platform-PlatformIO-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+![screen1](docs/images/IMG_1873.jpeg)
+![screen1](docs/images/IMG_1874.jpeg)
+![screen1](docs/images/IMG_1872.jpeg)
 
 ## Features
 
@@ -225,7 +228,7 @@ loop()
 - Between the 15-minute re-syncs the ESP32 crystal drifts by roughly **10–20 ms**.
 - The millisecond digits count smoothly but are not millisecond-accurate — treat the last digit as decorative.
 - If WiFi drops, the clock keeps running on the crystal (drifting ~1–2 s/day) until it reconnects. With no WiFi at boot it stays on "Syncing..." (no battery-backed RTC).
-
+1
 ## Display Colors
 
 | Element | Color |
