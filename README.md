@@ -38,6 +38,9 @@ A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that dis
 | Touch | CST816T |
 | RAM | OPI PSRAM |
 
+Get the board here -> [LILYGO T-Display S3 AMOLED](https://lilygo.cc/products/t-display-s3-amoled?variant=43228221636789)
+
+
 ## Getting Started
 
 ### 1. Prerequisites
