@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <LilyGo_AMOLED.h>
 #include <LV_Helper.h>
+#include <Preferences.h>
 
 #include "config.h"
 #include "display.h"
@@ -29,6 +30,15 @@ void setup()
     }
 
     amoled.setBrightness(BRIGHTNESS_LEVELS[BRIGHTNESS_INIT_IDX]);  // start at 192
+
+    // Restore saved orientation (BOOT button toggles it at runtime).
+    // Rotation 0 and 2 are both 536x240, so LVGL setup is unaffected.
+    Preferences prefs;
+    prefs.begin("display", true);
+    bool flipped = prefs.getBool("flipped", false);
+    prefs.end();
+    amoled.setRotation(flipped ? ROTATION_FLIPPED : ROTATION_NORMAL);
+    pinMode(FLIP_BUTTON_PIN, INPUT_PULLUP);
 
     // Use DMA buffers (internal SRAM) instead of a PSRAM framebuffer.
     // This avoids any PSRAM init dependency and is more reliable on first boot.

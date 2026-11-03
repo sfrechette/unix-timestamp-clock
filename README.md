@@ -26,6 +26,7 @@ A clean, swipeable clock for the **LILYGO T-Display-S3 AMOLED (Touch)** that dis
 - **WiFi status overlay** — white/amber/grey icon in the top-right corner
 - **Page dot indicators** — 5 dots at the bottom, active dot shown in white
 - **Brightness cycling** — tap the screen to cycle 4 brightness levels (64 → 128 → 192 → 255)
+- **Screen flip** — press the BOOT button to rotate the display 180° (touch follows); the orientation is remembered across reboots
 - **Credentials persist** across reboots via ESP32 NVS (Non-Volatile Storage)
 
 ## Hardware
@@ -116,7 +117,7 @@ Set `TIMEZONE_STR` in `secrets.h` using POSIX format:
 ```
 unix-timestamp-clock/
 ├── include/
-│   ├── config.h          # BLE UUIDs, brightness constants
+│   ├── config.h          # BLE UUIDs, brightness, flip button constants
 │   ├── display.h         # build_ui() declaration, extern amoled
 │   ├── wifi_manager.h    # wifi_ssid/pass externs, 3 public functions
 │   ├── ble_provision.h   # ble_init() declaration
@@ -138,10 +139,12 @@ setup()
   │
   ├─ amoled.begin()              // Init display hardware
   ├─ setBrightness(192)          // Start at level 3/4
+  ├─ setRotation(0 or 2)         // Restore saved orientation from NVS
   ├─ beginLvglHelperDMA()        // Init LVGL with internal DMA buffers
   ├─ build_ui()                  // Create tileview, labels, overlay, timers
   │    ├─ on_clock_tick (33ms)   // ms labels every tick; time/date once per second
-  │    └─ on_wifi_status_tick (2s) // Updates WiFi icon + network view
+  │    ├─ on_wifi_status_tick (2s) // Updates WiFi icon + network view
+  │    └─ on_button_poll (20ms)  // BOOT button → toggle 180° flip
   ├─ load_wifi_credentials()     // Read from NVS (seed from secrets.h if first boot)
   ├─ ble_init()                  // Start BLE GATT server, begin advertising
   └─ wifi_init()                 // Connect to WiFi, trigger NTP on IP acquired (15 min re-sync)
@@ -211,6 +214,7 @@ loop()
 
   Swipe left/right  →  Navigate between views (circular)
   Tap screen        →  Cycle brightness (64→128→192→255→64)
+  BOOT button       →  Flip screen 180° (saved to NVS)
 ```
 
 ## Key Technical Notes
@@ -224,6 +228,7 @@ loop()
 | Milliseconds display | `.mmm` is a separate, smaller label next to `HH:MM:SS`, so fast-changing digits never shift the main time. On the 12h view, AM/PM is its own static label at a fixed offset (space reserved for the widest `.000`), so it never flickers or moves |
 | Update rate | Clock timer runs every 33 ms but only the ms labels change every tick; the main time, dates and Unix timestamp are rebuilt only when the second changes. Time is read with `gettimeofday()` so seconds roll over exactly at `.000` |
 | NTP interval | `sntp_set_sync_interval()` reduces re-sync from the 3 h SDK default to 15 min, limiting crystal drift between syncs |
+| Screen flip | `amoled.setRotation()` toggles 0 ↔ 2 — both are 536×240, so LVGL and the UI layout are unchanged; the library also remaps touch. Saved in NVS `display/flipped`. The board has no IMU, so flipping is manual |
 | AMOLED power | True black (`#000000`) background saves power on OLED — unlit pixels draw no current |
 
 ## Time Accuracy

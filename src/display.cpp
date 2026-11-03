@@ -3,6 +3,7 @@
 #include "wifi_manager.h"
 
 #include <LV_Helper.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <time.h>
 #include <sys/time.h>
@@ -73,6 +74,7 @@ static void on_wifi_status_tick(lv_timer_t *t);
 static void on_tile_changed(lv_event_t *e);
 static void on_screen_tap(lv_event_t *e);
 static void on_wrap_timer(lv_timer_t *t);
+static void on_button_poll(lv_timer_t *t);
 
 // ---------------------------------------------------------------------------
 // Helper: create a label with font, color and alignment
@@ -188,6 +190,7 @@ void build_ui()
 
     lv_timer_create(on_clock_tick, 33, nullptr);   // ~30 fps for the ms digits
     lv_timer_create(on_wifi_status_tick, 2000, nullptr);
+    lv_timer_create(on_button_poll, 20, nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -511,4 +514,32 @@ static void on_screen_tap(lv_event_t * /*e*/)
     uint8_t level = BRIGHTNESS_LEVELS[brightness_index];
     amoled.setBrightness(level);
     Serial.printf("[Brightness] Level %u/4 → %u\n", brightness_index + 1, level);
+}
+
+// ---------------------------------------------------------------------------
+// BOOT button — toggles 180° screen flip (display + touch), saved to NVS.
+// Runs in LVGL timer context, so it never races a flush in progress.
+// ---------------------------------------------------------------------------
+static void on_button_poll(lv_timer_t * /*t*/)
+{
+    static bool     last_state  = HIGH;
+    static uint32_t last_change = 0;
+
+    bool state = digitalRead(FLIP_BUTTON_PIN);
+    if (state == last_state || millis() - last_change < 50) return;
+    last_state  = state;
+    last_change = millis();
+    if (state != LOW) return;   // act on press only
+
+    uint8_t rot = (amoled.getRotation() == ROTATION_FLIPPED) ? ROTATION_NORMAL
+                                                             : ROTATION_FLIPPED;
+    amoled.setRotation(rot);
+
+    Preferences prefs;
+    prefs.begin("display", false);
+    prefs.putBool("flipped", rot == ROTATION_FLIPPED);
+    prefs.end();
+
+    lv_obj_invalidate(lv_scr_act());   // full redraw in the new orientation
+    Serial.printf("[Flip] Rotation %u\n", rot);
 }

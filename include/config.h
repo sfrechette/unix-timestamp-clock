@@ -19,3 +19,10 @@
 
 static const uint8_t BRIGHTNESS_LEVELS[] = { 64, 128, 192, 255 };
 static const uint8_t BRIGHTNESS_COUNT    = 4;
+
+// ---------------------------------------------------------------------------
+// Screen flip — BOOT button toggles 180° rotation (saved in NVS)
+// ---------------------------------------------------------------------------
+#define FLIP_BUTTON_PIN   0             // BOOT button, active-low
+#define ROTATION_NORMAL   0             // landscape
+#define ROTATION_FLIPPED  2             // landscape, rotated 180°
