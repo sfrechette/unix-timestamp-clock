@@ -16,7 +16,7 @@
 #define COLOR_ACCENT  lv_color_hex(0xFFFFFF)  // white  — labels, active dot
 #define COLOR_DIM     lv_color_hex(0x333333)  // dark grey — inactive dots
 #define COLOR_DATE    lv_color_hex(0xCCCCCC)  // off-white — date text
-#define COLOR_SUBTLE  lv_color_hex(0x777777)  // grey   — ms digits, network details
+#define COLOR_SUBTLE  lv_color_hex(0x777777)  // grey   — network details
 #define COLOR_WARN    lv_color_hex(0xFF6B35)  // amber  — WiFi error
 
 // ---------------------------------------------------------------------------
@@ -97,14 +97,14 @@ static lv_obj_t *make_label(lv_obj_t *parent,
 }
 
 // ---------------------------------------------------------------------------
-// Helper: smaller grey ".mmm" label that trails a clock's HH:MM:SS label.
+// Helper: green ".mmm" label (same font as the digits) that trails HH:MM:SS.
 // Kept separate so the fast-changing digits never shift the big digits.
 // ---------------------------------------------------------------------------
 static lv_obj_t *make_ms_label(lv_obj_t *parent, lv_obj_t *number_label)
 {
     lv_obj_t *label = make_label(parent,
-                                 &lv_font_montserrat_32,
-                                 COLOR_SUBTLE,
+                                 &lv_font_montserrat_48,
+                                 COLOR_PRIMARY,
                                  LV_ALIGN_CENTER, 0, 0,
                                  "");
     align_ms_label(label, number_label);
@@ -115,7 +115,7 @@ static lv_obj_t *make_ms_label(lv_obj_t *parent, lv_obj_t *number_label)
 // text (and therefore width) changes — i.e. once per second.
 static void align_ms_label(lv_obj_t *ms_label, lv_obj_t *number_label)
 {
-    lv_obj_align_to(ms_label, number_label, LV_ALIGN_OUT_RIGHT_BOTTOM, 2, -6);
+    lv_obj_align_to(ms_label, number_label, LV_ALIGN_OUT_RIGHT_BOTTOM, 0, 0);
 }
 
 // AM/PM sits a fixed distance right of HH:MM:SS — reserved space for the
@@ -125,9 +125,9 @@ static void align_ampm_label()
     static lv_coord_t ms_slot_w = 0;
     if (ms_slot_w == 0) {
         lv_point_t size;
-        lv_txt_get_size(&size, ".000", &lv_font_montserrat_32, 0, 0,
+        lv_txt_get_size(&size, ".000", &lv_font_montserrat_48, 0, 0,
                         LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        ms_slot_w = size.x + 2 + 14;   // 2 = ms label offset, 14 = gap
+        ms_slot_w = size.x + 14;   // 14 = gap before AM/PM
     }
     // Bottom-align, then shift so both fonts share the same text baseline
     lv_coord_t baseline_ofs = lv_font_montserrat_40.base_line -
@@ -234,7 +234,7 @@ static void create_view1_utc(lv_obj_t *parent)
     utc_number_label = make_label(parent,
                                   &lv_font_montserrat_48,
                                   COLOR_PRIMARY,
-                                  LV_ALIGN_CENTER, -40, 0,
+                                  LV_ALIGN_CENTER, -55, 0,
                                   "Syncing...");
     // Shifted left so HH:MM:SS + trailing ms label read as one centered group
     utc_ms_label = make_ms_label(parent, utc_number_label);
@@ -260,7 +260,7 @@ static void create_view2_24h(lv_obj_t *parent)
     time24_number_label = make_label(parent,
                                      &lv_font_montserrat_48,
                                      COLOR_PRIMARY,
-                                     LV_ALIGN_CENTER, -40, 0,
+                                     LV_ALIGN_CENTER, -55, 0,
                                      "Syncing...");
     // Shifted left so HH:MM:SS + trailing ms label read as one centered group
     time24_ms_label = make_ms_label(parent, time24_number_label);
@@ -286,7 +286,7 @@ static void create_view3_12h(lv_obj_t *parent)
     time12_number_label = make_label(parent,
                                      &lv_font_montserrat_48,
                                      COLOR_PRIMARY,
-                                     LV_ALIGN_CENTER, -75, 0,
+                                     LV_ALIGN_CENTER, -92, 0,
                                      "Syncing...");
     // Shifted left so HH:MM:SS + ms + AM/PM read as one centered group
     time12_ms_label = make_ms_label(parent, time12_number_label);
